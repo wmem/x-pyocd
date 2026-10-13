@@ -164,6 +164,40 @@ class WorkerTests(unittest.TestCase):
         self.assertEqual(self.execute(connector, "reset")["status"], "PASS")
         self.assertEqual([event[0] for event in connector.events], ["connect", "enter", "reset", "exit"])
 
+    def test_readback_checks_segments_without_changing_target_state(self):
+        self.config["debug"]["connect"] = "attach"
+        self.config.pop("flash")
+        connector = FakeConnector(self.segments)
+        result = self.execute(connector, "readback")
+        names = [event[0] for event in connector.events]
+        self.assertEqual(names, ["connect", "enter", "read", "read", "read", "read", "exit"])
+        self.assertFalse(connector.events[0][2]["resume_on_disconnect"])
+        self.assertEqual(result["attempts"][0]["bytes"], 2318)
+        self.assertTrue(result["attempts"][0]["verified"])
+        self.assertEqual(self.reports(), [result])
+
+    def test_readback_failure_never_programs_or_resets(self):
+        self.config["debug"]["connect"] = "attach"
+        connector = FakeConnector(self.segments, failures=[100000])
+        with self.assertRaisesRegex(RuntimeError, "全部配置频率执行失败"):
+            self.execute(connector, "readback")
+        self.assertEqual(self.reports()[0]["status"], "FAIL")
+        self.assertEqual([event[0] for event in connector.events],
+                         ["connect", "enter", "read", "read", "read", "exit"])
+
+    def test_readback_rejects_reset_connect_mode_and_caches_before_connect(self):
+        connector = FakeConnector(self.segments)
+        with self.assertRaisesRegex(ValueError, "attach"):
+            self.execute(connector, "readback")
+        self.config["debug"]["connect"] = "attach"
+        for field in ("cache.enable_memory", "cache.read_code_from_elf"):
+            with self.subTest(field=field):
+                self.config["pyocd"][field] = True
+                with self.assertRaisesRegex(ValueError, "缓存"):
+                    self.execute(connector, "readback")
+                self.config["pyocd"][field] = False
+        self.assertEqual(connector.events, [])
+
     def test_probe_list_does_not_create_report(self):
         result = worker.execute({}, "probes", connector=FakeConnector([]))
         self.assertEqual(result["probes"][0]["id"], "TEST-PROBE")
