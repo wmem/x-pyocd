@@ -15,14 +15,14 @@ xmake lua scripts/prepare-addon.lua /tmp/x-pyocd-addon-stage
 xmake addon --install /tmp/x-pyocd-addon-stage
 ```
 
-这里安装的是 Xmake 插件，不会安装其运行依赖。当前 0.1.0 处于本地开发与验证阶段，尚未远程发布。配方发布后，可在消费工程中声明：
+这里安装的是 Xmake 插件，不会安装其运行依赖。消费工程可声明版本化依赖：
 
 ```lua
 add_repositories("kunyi git@github.com:wmem/xmake-addons.git")
 add_addons("x-pyocd 0.1.0")
 ```
 
-版本化消费需要索引仓库中的配方和对应源码提交；仓库源码已存在不代表远程配方已发布。
+版本化安装需要索引仓库中的对应配方及其固定的源码提交。
 
 安装后，在消费工程目录执行：
 
@@ -105,7 +105,7 @@ config.runtime = {
 
 ## 在 xdtc action 中直接调用
 
-需要提供 action `entry` 的 xdtc 源码版本 v0.10.0 或对应的新 Addon。下面假定 `board.lua` 中的 `tools.download` 已具备上面的配置字段：
+需要提供 action `entry` 的 xdtc：源码版本 v0.10.0，Addon 版本 0.10.0，源码与分发版本使用相同版本号。下面假定 `board.lua` 中的 `tools.download` 已具备上面的配置字段：
 
 ```lua
 -- xdtc.lua
@@ -140,8 +140,8 @@ uv run --no-project --no-sync python tests/test_worker.py
 
 前者检查公开配置合同，后者使用模拟 pyOCD 后端检查下载、校验、失败重试和探针锁。检查入口见 [api_run.lua](tests/api_run.lua) 与 [test_worker.py](tests/test_worker.py)。这里给出运行方式，不把源码测试视为实板结果。
 
-源码中的配置校验和执行流程与实际板卡验收是不同层次。准备插件、配置检查和模拟后端检查不能替代真实探针枚举、下载读回和复位验证，也不能证明远程索引已经发布。实板验证需要工程的真实配置、已准备的运行依赖和可访问探针。
+源码中的配置校验和执行流程与实际板卡验收是不同层次。准备插件、配置检查和模拟后端检查不能替代真实探针枚举、下载读回和复位验证。实板验证需要工程的真实配置、已准备的运行依赖和可访问探针。
 
-2026-10-13 在 KY3133-B00／GD32F427 工程中，隔离安装后的插件通过 WSL 调用 Windows pyOCD：枚举到 WCH-Link `BC496BA027E9`，经 xdtc 内联 entry 在 100 kHz 完成 ELF 下载及 169940 bytes 实读校验，随后 entry 复位通过。报告及读回文件保存在该 MCU 工程的 `build/x-addon-hardware-evidence/flash-*/`、`reset-*/`。该结果覆盖当前芯片、探针和 Windows via WSL 配置；Linux 仍是模拟后端验证，其他芯片、探针及物理上电行为未由本轮验证覆盖，远程发布尚未完成。
+2026-10-13 在 KY3133-B00／GD32F427 工程中，隔离安装后的插件通过 WSL 调用 Windows pyOCD：枚举到 WCH-Link `BC496BA027E9`，经 xdtc 内联 entry 在 100 kHz 完成 ELF 下载及 169940 bytes 实读校验，随后 entry 复位通过。报告及读回文件保存在该 MCU 工程的 `build/x-addon-hardware-evidence/flash-*/`、`reset-*/`。该结果覆盖当前芯片、探针和 Windows via WSL 配置；Linux 仍是模拟后端验证，其他芯片、探针及物理上电行为未由本轮验证覆盖。
 
 许可证见 [LICENSE](LICENSE)。
