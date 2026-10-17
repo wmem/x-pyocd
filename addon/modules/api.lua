@@ -104,7 +104,14 @@ function plan(config, operation)
     end
     if operation == "flash" or operation == "readback" then
         assert(type(c.artifacts) == "table", "x-pyocd: 请配置 artifacts")
-        text(c.artifacts.elf, "artifacts.elf")
+        if c.download then
+            assert(type(c.download) == "table" and c.download.format == "bin",
+                "x-pyocd: download.format 只支持 bin")
+            text(c.download.artifact, "download.artifact")
+            text(c.artifacts[c.download.artifact], "download artifact")
+        else
+            text(c.artifacts.elf, "artifacts.elf")
+        end
         assert(
             type(c.memory) == "table" and type(c.memory.flash) == "table",
             "x-pyocd: 请配置 memory.flash"
@@ -115,6 +122,12 @@ function plan(config, operation)
             "x-pyocd: memory.flash.start 非法"
         )
         positive(flash.size, "memory.flash.size")
+        if c.download then
+            local address = c.download.address
+            assert(type(address) == "number" and address % 1 == 0
+                and address >= flash.start and address < flash.start + flash.size,
+                "x-pyocd: download.address 超出配置的 Flash")
+        end
     end
     if operation == "readback" then
         assert(c.debug.connect == "attach", "x-pyocd: readback 必须使用 attach")

@@ -66,6 +66,28 @@ def flash_segments(filename, memory):
     return sorted(segments)
 
 
+def load_image(config, segments_reader=None):
+    """只读取文件和配置；在建立任何设备连接前完成边界校验。"""
+    download = config.get("download")
+    if download is None:
+        filename = config["artifacts"]["elf"]
+        segments = (segments_reader or flash_segments)(filename, config["memory"]["flash"])
+        return filename, {}, segments, {"format": "elf", "file": filename}
+    if not isinstance(download, dict) or download.get("format") != "bin":
+        raise ValueError("download.format 只支持 bin")
+    filename = config["artifacts"][download["artifact"]]
+    data = Path(filename).read_bytes()
+    memory = config["memory"]["flash"]
+    address = download.get("address")
+    if (type(address) is not int or not data or address < memory["start"]
+            or address - memory["start"] > memory["size"]
+            or len(data) > memory["size"] - (address - memory["start"])):
+        raise ValueError("BIN 地址或长度超出配置的 Flash，或镜像为空")
+    return (filename, {"file_format": "bin", "base_address": address}, [(address, data)],
+            {"format": "bin", "artifact": download["artifact"], "file": filename,
+             "address": address, "size": len(data)})
+
+
 def verify_segments(target, segments, report, frequency):
     """读回真实加载段并保存证据，不改变目标运行状态。"""
     result = {"bytes": 0, "segments": []}
@@ -91,6 +113,8 @@ def execute(config, operation, *, connector=None, programmer=None, segments_read
         if (config["pyocd"].get("cache.enable_memory") is not False
                 or config["pyocd"].get("cache.read_code_from_elf") is not False):
             raise ValueError("readback 必须关闭内存与 ELF 读取缓存")
+    if operation in ("flash", "readback"):
+        filename, program_options, segments, image = load_image(config, segments_reader)
     # 支持注入后端以验证真实流程；只有实际执行才导入 pyOCD。
     if connector is None:
         from pyocd.core.helpers import ConnectHelper
@@ -104,12 +128,13 @@ def execute(config, operation, *, connector=None, programmer=None, segments_read
         if operation == "flash" and programmer is None:
             from pyocd.flash.file_programmer import FileProgrammer
             programmer = FileProgrammer
-        segments = (segments_reader or flash_segments)(config["artifacts"]["elf"], config["memory"]["flash"])
     probe = select_probe(connector.get_all_connected_probes(blocking=False), config["debug"]["probe"])
     report = Path(config["report_dir"]) / (
         operation + "-" + time.strftime("%Y%m%d-%H%M%S") + f"-{time.time_ns() % 1000000000:09d}")
     report.mkdir(parents=True)
     result = {"status": "FAIL", "chip": config["chip"], "probe": probe.unique_id, "attempts": []}
+    if operation in ("flash", "readback"):
+        result["image"] = image
     pyocd_file = report / "pyocd.json"
     pyocd_file.write_text(json.dumps(config["pyocd"], ensure_ascii=False, indent=2) + "\n")
     frequencies = config["flash"]["frequencies"] if operation == "flash" else [config["debug"]["frequency"]]
@@ -134,7 +159,7 @@ def execute(config, operation, *, connector=None, programmer=None, segments_read
                             attempt["verified"] = True
                         else:
                             session.target.reset_and_halt()
-                            programmer(session, chip_erase="sector").program(config["artifacts"]["elf"])
+                            programmer(session, chip_erase="sector").program(filename, **program_options)
                             if config["flash"]["verify"]:
                                 session.target.halt()
                                 attempt.update(verify_segments(session.target, segments, report, frequency))

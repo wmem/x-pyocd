@@ -82,8 +82,10 @@ class FakeConnector:
         connector = self
 
         class Programmer:
-            def program(self, filename):
+            def program(self, filename, **options):
                 connector.events.append(("program", session.frequency, filename))
+                if options:
+                    connector.events.append(("program_options", options))
 
         return Programmer()
 
@@ -156,6 +158,37 @@ class WorkerTests(unittest.TestCase):
         result = self.execute(connector)
         self.assertNotIn("read", [event[0] for event in connector.events])
         self.assertFalse(result["attempts"][0]["verified"])
+
+    def test_bin_download_and_readback_use_explicit_file_and_address(self):
+        filename = Path(self.temp.name) / "app_burn.bin"
+        data = bytes(range(256)) * 5
+        filename.write_bytes(data)
+        self.config["artifacts"]["burn"] = str(filename)
+        self.config["download"] = {"format": "bin", "artifact": "burn", "address": 0x08001000}
+        connector = FakeConnector([(0x08001000, data)])
+        result = self.execute(connector)
+        self.assertEqual(result["image"]["size"], len(data))
+        self.assertIn(("program", 4000000, str(filename)), connector.events)
+        self.assertIn(("program_options", {"file_format": "bin", "base_address": 0x08001000}), connector.events)
+        self.config["debug"]["connect"] = "attach"
+        connector = FakeConnector([(0x08001000, data)])
+        self.execute(connector, "readback")
+        self.assertFalse(any(e[0] in ("program", "reset", "reset_and_halt") for e in connector.events))
+
+    def test_bin_invalid_range_or_format_rejected_before_device_access(self):
+        filename = Path(self.temp.name) / "bad.bin"
+        self.config["artifacts"]["burn"] = str(filename)
+        connector = FakeConnector([])
+        for address, data in [(0x07ffffff, b"x"), (0x0800ffff, b"xx"),
+                              (0x08000000, b""), (float(0x08000000), b"x")]:
+            filename.write_bytes(data)
+            self.config["download"] = {"format": "bin", "artifact": "burn", "address": address}
+            with self.assertRaises(ValueError):
+                self.execute(connector)
+        self.config["download"]["format"] = "hex"
+        with self.assertRaises(ValueError):
+            self.execute(connector)
+        self.assertEqual(connector.events, [])
 
     def test_reset_does_not_read_or_program_elf(self):
         self.config.pop("artifacts")

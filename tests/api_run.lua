@@ -43,6 +43,20 @@ test("配置计划统一频率与协议", function()
     local result = api.plan(fixture(), "flash")
     assert(result.pyocd.frequency == 100000 and result.pyocd.dap_protocol == "swd")
 end)
+test("BIN 计划显式绑定制品及基址，不要求伪造 ELF", function()
+    local c = fixture()
+    c.artifacts = {burn = "/tmp/program_burn.bin"}
+    c.download = {format = "bin", artifact = "burn", address = 0x08000000}
+    local result = api.plan(c, "flash")
+    assert(result.download.address == 0x08000000 and result.artifacts.burn == c.artifacts.burn)
+    for _, address in ipairs({0x07ffffff, 0x08000400, (0x08000000 + 0.5)}) do
+        c.download.address = address
+        assert(not raw_pcall(function() api.plan(c, "flash") end))
+    end
+    c.download.address = 0x08000000
+    c.download.format = "hex"
+    assert(not raw_pcall(function() api.plan(c, "flash") end))
+end)
 test("readback 独立于下载配置，且导出当前后端资源", function()
     local c = fixture()
     c.debug.connect = "attach"

@@ -1,8 +1,10 @@
-# x-pyocd 0.1.1
+# x-pyocd 0.2.0
 
 x-pyocd 是 Xmake Addon，为工程提供 pyOCD 探针枚举、ELF 下载、读回校验和复位。工程通过 `config` 显式提供执行系统、解释器、芯片、探针、通信速率、固件和存储布局；插件校验配置后运行对应后端，不解析 `board.lua`，也不安装 Python 或 pyOCD。
 
 插件可独立调用，也可由 xdtc 的 action `entry` 导入。xdtc 负责展开和选择数据，x-pyocd 负责执行；芯片 DFP 和 pyOCD 兼容脚本由工程或 MSP 提供。串口交互由独立的 [x-console](https://github.com/wmem/x-console) 提供。
+
+0.2.0 增加 BIN 下载与实读模式：在配置中声明 `artifacts.burn = "/path/to/app_burn.bin"`，以及 `download = {format = "bin", artifact = "burn", address = 0x08000000}`。artifact 引用 artifacts 中的路径，address 是必填基址。文件非空及完整范围在连接前校验；flash 按原有扇区编程策略写入同一文件，readback 逐字节核对同一范围，报告保存实际格式/文件/基址/长度。该模式不额外清理分区；没有 download 时保留 ELF 行为。16 项后端替身及 14 组 API 检查通过，本次新增 BIN 路径尚未验证实板。
 
 0.1.1 新增独立 readback 和 backend 接口，用于迁出 MCU MSP 的通用调试能力。这些新增接口已在 MCU 工程隔离环境通过 13 组 Lua API 和 14 项 Python 后端回归，实板下载、复位、运行和独立 readback 均通过。本版分发版本为 0.1.1；验证未修改全局安装，0.1.0 与下方历史实板结果不覆盖本轮新增接口。
 
@@ -21,7 +23,7 @@ xmake addon --install /tmp/x-pyocd-addon-stage
 
 ```lua
 add_repositories("kunyi git@github.com:wmem/xmake-addons.git")
-add_addons("x-pyocd 0.1.1")
+add_addons("x-pyocd 0.2.0")
 ```
 
 版本化安装需要索引仓库中的对应配方及其固定的源码提交。
