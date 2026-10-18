@@ -113,7 +113,7 @@ config.runtime = {
 
 ## 在 xdtc action 中直接调用
 
-需要提供 action `entry` 的 xdtc：源码版本 v0.10.0，Addon 版本 0.10.0，源码与分发版本使用相同版本号。下面假定 `board.lua` 中的 `tools.download` 已具备上面的配置字段：
+配合 xdtc 0.11.0 的 action `entry` 使用，工具源码与 Addon 使用相同版本号。下面假定 `board.lua` 中的 `tools.download` 已具备上面的配置字段：
 
 ```lua
 -- xdtc.lua
