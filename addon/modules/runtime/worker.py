@@ -3,6 +3,7 @@ import argparse
 import contextlib
 import hashlib
 import json
+import logging
 import os
 from pathlib import Path
 import tempfile
@@ -166,6 +167,8 @@ def execute(config, operation, *, connector=None, programmer=None, segments_read
         result["probe_type"] = probe_type
     if operation in ("flash", "readback"):
         result["image"] = image
+    if operation == "flash":
+        result["programming_options"] = flash_options
     pyocd_file = report / "pyocd.json"
     options = dict(config["pyocd"])
     if probe_type == "jlink":
@@ -193,6 +196,8 @@ def execute(config, operation, *, connector=None, programmer=None, segments_read
                             session.close()
                             raise
                     with session:
+                        if probe_type == "jlink":
+                            attempt["probe_firmware_before"] = session.probe._link.firmware_version
                         if operation == "reset":
                             session.target.reset()
                         elif operation == "readback":
@@ -206,6 +211,10 @@ def execute(config, operation, *, connector=None, programmer=None, segments_read
                                 attempt.update(verify_segments(session.target, segments, report, frequency))
                             session.target.reset()
                             attempt.update(verified=config["flash"]["verify"], bytes=sum(len(data) for _, data in segments))
+                        if probe_type == "jlink":
+                            attempt["probe_firmware_after"] = session.probe._link.firmware_version
+                            if attempt["probe_firmware_before"] != attempt["probe_firmware_after"]:
+                                raise RuntimeError("J-Link 固件标识前后不一致")
                     attempt["status"] = result["status"] = "PASS"
                     print(f"PASS: {operation}；{frequency} Hz；{report}", flush=True)
                     return result
@@ -220,6 +229,7 @@ def execute(config, operation, *, connector=None, programmer=None, segments_read
 
 
 def main():
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", required=True)
     parser.add_argument("--lock-held", action="store_true", help=argparse.SUPPRESS)

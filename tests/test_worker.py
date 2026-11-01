@@ -84,7 +84,8 @@ class FakeConnector:
         def command(text):
             connector.events.append(("pre_open", text))
             return connector.jlink_command_rc
-        session.probe = types.SimpleNamespace(_link=types.SimpleNamespace(exec_command=command))
+        session.probe = types.SimpleNamespace(_link=types.SimpleNamespace(
+            exec_command=command, firmware_version="fixture-firmware"))
         return session
 
     def programmer(self, session, **kwargs):
