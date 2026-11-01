@@ -17,6 +17,24 @@ def select_probe(probes, requested=None):
     return probes[0]
 
 
+def connected_probes(connector, debug):
+    options = {"blocking": False}
+    if debug.get("probe_type"):
+        options["unique_id"] = debug["probe_type"] + ":"
+    return connector.get_all_connected_probes(**options)
+
+
+def prepare_jlink(session, attempt):
+    """对本次 Session 真正使用的探针设置保护，必须先于 open。"""
+    attempt["pre_open_commands"] = []
+    for command in ("DisableAutoUpdateFW", "SuppressInfoUpdateFW"):
+        rc = session.probe._link.exec_command(command)
+        attempt["pre_open_commands"].append({"command": command, "return_code": rc})
+        if rc != 0:
+            raise RuntimeError(f"{command} 返回 {rc}，拒绝打开 J-Link")
+    attempt["automatic_firmware_update_disabled"] = True
+
+
 @contextlib.contextmanager
 def probe_lock(identity, namespace, *, held=False):
     # 测试桥接可在整个生命周期持锁，内部操作显式复用同一把锁。
@@ -107,6 +125,13 @@ def verify_segments(target, segments, report, frequency):
 def execute(config, operation, *, connector=None, programmer=None, segments_reader=None, lock_held=False):
     if operation not in ("flash", "reset", "probes", "readback"):
         raise ValueError(f"未知操作：{operation}")
+    flash_options = {"chip_erase": "sector"}
+    if operation == "flash":
+        for name in ("smart_flash", "keep_unwritten"):
+            if name in config["flash"]:
+                if type(config["flash"][name]) is not bool:
+                    raise ValueError("flash." + name + " 必须为布尔值")
+                flash_options[name] = config["flash"][name]
     if operation == "readback":
         if config["debug"]["connect"] != "attach":
             raise ValueError("readback 必须使用 attach，不改变目标运行状态")
@@ -128,15 +153,25 @@ def execute(config, operation, *, connector=None, programmer=None, segments_read
         if operation == "flash" and programmer is None:
             from pyocd.flash.file_programmer import FileProgrammer
             programmer = FileProgrammer
-    probe = select_probe(connector.get_all_connected_probes(blocking=False), config["debug"]["probe"])
+    debug = config["debug"]
+    probe_type = debug.get("probe_type")
+    if probe_type not in (None, "jlink", "cmsisdap"):
+        raise ValueError("debug.probe_type 只支持 jlink/cmsisdap")
+    probe = select_probe(connected_probes(connector, debug), debug["probe"])
     report = Path(config["report_dir"]) / (
         operation + "-" + time.strftime("%Y%m%d-%H%M%S") + f"-{time.time_ns() % 1000000000:09d}")
     report.mkdir(parents=True)
     result = {"status": "FAIL", "chip": config["chip"], "probe": probe.unique_id, "attempts": []}
+    if probe_type:
+        result["probe_type"] = probe_type
     if operation in ("flash", "readback"):
         result["image"] = image
     pyocd_file = report / "pyocd.json"
-    pyocd_file.write_text(json.dumps(config["pyocd"], ensure_ascii=False, indent=2) + "\n")
+    options = dict(config["pyocd"])
+    if probe_type == "jlink":
+        # 避免 pyOCD 的默认静默更新设置覆盖连接前的升级保护；不由探针供电。
+        options.update({"jlink.non_interactive": False, "jlink.power": False})
+    pyocd_file.write_text(json.dumps(options, ensure_ascii=False, indent=2) + "\n")
     frequencies = config["flash"]["frequencies"] if operation == "flash" else [config["debug"]["frequency"]]
     try:
         with probe_lock(probe.unique_id, config["lock_namespace"], held=lock_held):
@@ -145,12 +180,18 @@ def execute(config, operation, *, connector=None, programmer=None, segments_read
                 result["attempts"].append(attempt)
                 try:
                     session = connector.session_with_chosen_probe(
-                        unique_id=probe.unique_id, blocking=False,
+                        unique_id=(probe_type + ":" if probe_type else "") + probe.unique_id, blocking=False,
                         connect_mode=config["debug"]["connect"], frequency=frequency,
                         resume_on_disconnect=operation != "readback",
                         config_file=str(pyocd_file), project_dir=config["project_root"])
                     if session is None:
                         raise RuntimeError("探针不可用")
+                    if probe_type == "jlink":
+                        try:
+                            prepare_jlink(session, attempt)
+                        except BaseException:
+                            session.close()
+                            raise
                     with session:
                         if operation == "reset":
                             session.target.reset()
@@ -159,7 +200,7 @@ def execute(config, operation, *, connector=None, programmer=None, segments_read
                             attempt["verified"] = True
                         else:
                             session.target.reset_and_halt()
-                            programmer(session, chip_erase="sector").program(filename, **program_options)
+                            programmer(session, **flash_options).program(filename, **program_options)
                             if config["flash"]["verify"]:
                                 session.target.halt()
                                 attempt.update(verify_segments(session.target, segments, report, frequency))

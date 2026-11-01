@@ -373,5 +373,33 @@ test("后端异常向调用方传播并释放运行配置", function()
     assert(c.pyocd.frequency == nil)
 end)
 
+test("J-Link 与 DAP 显式选择及 Linux 库路径仅影响子进程", function()
+    local c = fixture()
+    c.build = nil
+    for _, kind in ipairs({ "jlink", "cmsisdap" }) do
+        c.debug.probe_type = kind
+        assert(api.plan(c, "flash").debug.probe_type == kind)
+    end
+    c.debug.probe_type = "unknown"
+    assert(not raw_pcall(function() api.plan(c, "flash") end))
+    c.debug.probe_type = "jlink"
+    c.runtime.jlink_library_dir = "/tmp/jlink libraries"
+    c.flash.smart_flash = false
+    c.flash.keep_unwritten = true
+    local inherited = os.getenv("LD_LIBRARY_PATH")
+    with_execution_stubs(function(calls)
+        api.flash(c)
+        assert(calls[1].options.envs.LD_LIBRARY_PATH:startswith("/tmp/jlink libraries"))
+        assert(calls[1].config.flash.smart_flash == false)
+        assert(calls[1].config.flash.keep_unwritten == true)
+        assert(os.getenv("LD_LIBRARY_PATH") == inherited)
+    end)
+    for _, name in ipairs({ "smart_flash", "keep_unwritten" }) do
+        local bad = fixture()
+        bad.flash[name] = "false"
+        assert(not raw_pcall(function() api.plan(bad, "flash") end))
+    end
+end)
+
 print("x-pyocd API: %d 通过，%d 失败", passed, failed)
 assert(failed == 0, "x-pyocd API 测试失败")

@@ -32,10 +32,14 @@ class FakeConnector:
         self.segments = segments
         self.failures = failures
         self.events = []
+        self.probe_queries = []
+        self.jlink_command_rc = 0
         self.probes = [types.SimpleNamespace(unique_id="TEST-PROBE", description="offline")]
 
     def get_all_connected_probes(self, **kwargs):
-        assert kwargs == {"blocking": False}
+        assert kwargs.get("blocking") is False
+        assert set(kwargs) <= {"blocking", "unique_id"}
+        self.probe_queries.append(kwargs)
         return self.probes
 
     def session_with_chosen_probe(self, **kwargs):
@@ -44,6 +48,9 @@ class FakeConnector:
         connector = self
 
         class Session:
+            def close(self):
+                connector.events.append(("close", frequency))
+
             def __enter__(self):
                 connector.events.append(("enter", frequency))
                 return self
@@ -74,10 +81,16 @@ class FakeConnector:
         session = Session()
         session.target = Target()
         session.frequency = frequency
+        def command(text):
+            connector.events.append(("pre_open", text))
+            return connector.jlink_command_rc
+        session.probe = types.SimpleNamespace(_link=types.SimpleNamespace(exec_command=command))
         return session
 
     def programmer(self, session, **kwargs):
-        assert kwargs == {"chip_erase": "sector"}
+        assert kwargs["chip_erase"] == "sector"
+        if len(kwargs) > 1:
+            self.events.append(("flash_options", kwargs))
         self.events.append(("sector", session.frequency))
         connector = self
 
@@ -91,6 +104,52 @@ class FakeConnector:
 
 
 class WorkerTests(unittest.TestCase):
+    def test_jlink_protection_applies_to_session_probe_before_open(self):
+        self.config["debug"]["probe_type"] = "jlink"
+        self.config["flash"]["frequencies"] = [100000]
+        original = copy.deepcopy(self.config)
+        connector = FakeConnector(self.segments)
+        result = self.execute(connector)
+        self.assertEqual(connector.probe_queries, [{"blocking": False, "unique_id": "jlink:"}])
+        self.assertEqual(connector.events[0][2]["unique_id"], "jlink:TEST-PROBE")
+        self.assertEqual(connector.events[1:4], [("pre_open", "DisableAutoUpdateFW"),
+                                               ("pre_open", "SuppressInfoUpdateFW"), ("enter", 100000)])
+        self.assertTrue(result["attempts"][0]["automatic_firmware_update_disabled"])
+        options = json.loads(next(Path(self.config["report_dir"]).glob("*/pyocd.json")).read_text())
+        self.assertIs(options["jlink.non_interactive"], False)
+        self.assertIs(options["jlink.power"], False)
+        self.assertEqual(self.config, original)
+
+    def test_jlink_guard_failure_never_opens_or_programs(self):
+        self.config["debug"]["probe_type"] = "jlink"
+        self.config["flash"]["frequencies"] = [100000]
+        connector = FakeConnector(self.segments)
+        connector.jlink_command_rc = 1
+        with self.assertRaisesRegex(RuntimeError, "全部配置频率执行失败"):
+            self.execute(connector)
+        self.assertEqual([e[0] for e in connector.events], ["connect", "pre_open", "close"])
+        self.assertIn("拒绝打开", self.reports()[0]["attempts"][0]["error"])
+
+    def test_typed_dap_preserves_flow_and_programming_options(self):
+        self.config["debug"]["probe_type"] = "cmsisdap"
+        self.config["flash"].update(smart_flash=False, keep_unwritten=True)
+        connector = FakeConnector(self.segments)
+        self.execute(connector)
+        self.assertEqual(connector.probe_queries[0]["unique_id"], "cmsisdap:")
+        self.assertEqual(connector.events[0][2]["unique_id"], "cmsisdap:TEST-PROBE")
+        self.assertNotIn("pre_open", [e[0] for e in connector.events])
+        self.assertIn(("flash_options", {"chip_erase": "sector", "smart_flash": False,
+                                         "keep_unwritten": True}), connector.events)
+
+    def test_invalid_programming_flags_rejected_before_connect(self):
+        for name in ("smart_flash", "keep_unwritten"):
+            self.config["flash"][name] = "false"
+            connector = FakeConnector(self.segments)
+            with self.assertRaisesRegex(ValueError, "必须为布尔值"):
+                self.execute(connector)
+            self.assertEqual(connector.events, [])
+            del self.config["flash"][name]
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix="x-pyocd-test-")
         self.addCleanup(self.temp.cleanup)

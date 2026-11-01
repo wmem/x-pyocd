@@ -74,12 +74,18 @@ function plan(config, operation)
     else
         assert(os.host() == "linux", "x-pyocd: Linux 后端需要 Linux 执行环境")
     end
+    if c.runtime.jlink_library_dir ~= nil then
+        assert(c.host == "linux", "x-pyocd: jlink_library_dir 当前只支持 Linux")
+        text(c.runtime.jlink_library_dir, "runtime.jlink_library_dir")
+    end
     if operation ~= "probes" then
         text(c.chip, "chip")
         text(c.lock_namespace, "lock_namespace")
         assert(c.lock_namespace:match("^[%w_-]+$"), "x-pyocd: lock_namespace 含非法字符")
         assert(type(c.debug) == "table", "x-pyocd: 请配置 debug")
         text(c.debug.probe, "debug.probe")
+        assert(c.debug.probe_type == nil or c.debug.probe_type == "jlink"
+            or c.debug.probe_type == "cmsisdap", "x-pyocd: debug.probe_type 只支持 jlink/cmsisdap")
         positive(c.debug.frequency, "debug.frequency")
         assert(
             c.debug.protocol == "swd" or c.debug.protocol == "jtag",
@@ -133,6 +139,10 @@ function plan(config, operation)
         assert(c.debug.connect == "attach", "x-pyocd: readback 必须使用 attach")
     end
     if operation == "flash" then
+        for _, name in ipairs({ "smart_flash", "keep_unwritten" }) do
+            assert(c.flash == nil or c.flash[name] == nil or type(c.flash[name]) == "boolean",
+                "x-pyocd: flash." .. name .. " 必须为布尔值")
+        end
         assert(
             type(c.flash) == "table" and type(c.flash.verify) == "boolean",
             "x-pyocd: 请配置 flash.verify"
@@ -236,7 +246,13 @@ function run(config, operation)
                     args,
                     { path.join(resources, "worker.py"), "--config", file, operation }
                 )
-                os.execv(program, args, { curdir = c.project_root })
+                local options = { curdir = c.project_root }
+                if c.runtime.jlink_library_dir then
+                    local previous = os.getenv("LD_LIBRARY_PATH")
+                    options.envs = { LD_LIBRARY_PATH = c.runtime.jlink_library_dir
+                        .. (previous and #previous > 0 and ":" .. previous or "") }
+                end
+                os.execv(program, args, options)
             end
         end,
         finally({

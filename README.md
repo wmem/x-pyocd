@@ -1,4 +1,8 @@
-# x-pyocd 0.2.0
+# x-pyocd 0.3.0
+
+0.3.0 增加可选 `debug.probe_type = "jlink" | "cmsisdap"`，同时约束枚举与 Session 选择；省略时保留原有按 ID 选择方式。J-Link 模式在 Session 打开实际探针前执行 `DisableAutoUpdateFW`、`SuppressInfoUpdateFW`，任一返回非零即拒绝打开，并固定关闭 `jlink.non_interactive` 和探针供电。Linux 可通过 `runtime.jlink_library_dir` 指定已有 J-Link 库目录，路径只加入子进程的 `LD_LIBRARY_PATH`，不安装 SDK 或升级探针。此接入使用 pyOCD 的 J-Link 适配器，目标协议仍由 `debug.protocol` 选择。
+
+`flash.smart_flash` 和 `flash.keep_unwritten` 为可选布尔值，直接传给原 FileProgrammer；省略时保持原行为。需要证明实际擦写时显式设 `smart_flash=false`；需要保留擦除扇区内镜像范围之外的内容时设 `keep_unwritten=true`。它们不扩大允许的写入地址，也不代替调用方的物理扇区边界与整片保留校验。20 项后端回归和 15 组 Lua API 检查通过，含原 DAP 流程、实际 Session 探针的连接前保护、保护失败不打开、类型筛选及子进程环境隔离；实板结果由消费工程另记。
 
 x-pyocd 是 Xmake Addon，为工程提供 pyOCD 探针枚举、ELF 下载、读回校验和复位。工程通过 `config` 显式提供执行系统、解释器、芯片、探针、通信速率、固件和存储布局；插件校验配置后运行对应后端，不解析 `board.lua`，也不安装 Python 或 pyOCD。
 
@@ -23,7 +27,7 @@ xmake addon --install /tmp/x-pyocd-addon-stage
 
 ```lua
 add_repositories("kunyi git@github.com:wmem/xmake-addons.git")
-add_addons("x-pyocd 0.2.0")
+add_addons("x-pyocd 0.3.0")
 ```
 
 版本化安装需要索引仓库中的对应配方及其固定的源码提交。
