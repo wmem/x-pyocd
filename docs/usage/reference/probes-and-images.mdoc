@@ -1,0 +1,27 @@
+{% section id="x-pyocd:use:reference:probes-and-images" title="探针类型、镜像与兼容性" %}
+
+0.3.0 增加可选 `debug.probe_type = "jlink" | "cmsisdap"`，同时约束枚举与 Session 选择；省略时保留原有按 ID 选择方式。
+
+J-Link 模式在 Session 打开实际探针前执行 `DisableAutoUpdateFW`、`SuppressInfoUpdateFW`，任一返回非零即拒绝打开，并固定关闭 `jlink.non_interactive` 和探针供电。
+
+Linux 可通过 `runtime.jlink_library_dir` 指定已有 J-Link 库目录，路径只加入子进程的 `LD_LIBRARY_PATH`，不安装 SDK 或升级探针。
+
+此接入使用 pyOCD 的 J-Link 适配器，目标协议仍由 `debug.protocol` 选择。
+
+`flash.smart_flash` 和 `flash.keep_unwritten` 为可选布尔值，直接传给原 FileProgrammer；省略时保持原行为。
+
+需要证明实际擦写时显式设 `smart_flash=false`；需要保留擦除扇区内镜像范围之外的内容时设 `keep_unwritten=true`。它们不扩大允许的写入地址，也不代替调用方的物理扇区边界与整片保留校验。
+
+20 项后端回归和 15 组 Lua API 检查通过，含原 DAP 流程、实际 Session 探针的连接前保护、保护失败不打开、类型筛选及子进程环境隔离；实板结果由消费工程另记。
+
+0.2.0 增加 BIN 下载与实读模式：在配置中声明 `artifacts.burn = "/path/to/app_burn.bin"`，以及 `download = {format = "bin", artifact = "burn", address = 0x08000000}`。
+
+artifact 引用 artifacts 中的路径，address 是必填基址。文件非空及完整范围在连接前校验；flash 按原有扇区编程策略写入同一文件，readback 逐字节核对同一范围，报告保存实际格式/文件/基址/长度。
+
+该模式不额外清理分区；没有 download 时保留 ELF 行为。16 项后端替身及 14 组 API 检查通过，本次新增 BIN 路径尚未验证实板。
+
+0.1.1 新增独立 readback 和 backend 接口，用于迁出 MCU MSP 的通用调试能力。这些新增接口已在 MCU 工程隔离环境通过 13 组 Lua API 和 14 项 Python 后端回归，实板下载、复位、运行和独立 readback 均通过。本版分发版本为 0.1.1；验证未修改全局安装，0.1.0 与下方历史实板结果不覆盖本轮新增接口。
+
+上述记录分别对应所标版本及验证范围；当前完整操作合同见[执行配置](config.mdoc)。
+
+{% /section %}

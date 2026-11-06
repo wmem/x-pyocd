@@ -1,0 +1,17 @@
+{% section id="x-pyocd:home" title="x-pyocd 文档" %}
+
+{% directory-order items=["usage/", "development/"] /%}
+
+通过显式配置执行 pyOCD 探针枚举、固件下载、实读校验和复位，支持 Linux 与 Windows 执行环境。
+
+| 阅读任务 | 入口 |
+| --- | --- |
+| 建立整体认识 | [认识工具](usage/overview.mdoc) |
+| 完成第一次操作 | [快速开始](usage/quickstart.mdoc) |
+| 按任务选择用法 | [使用文档](usage/index.mdoc) |
+| 查询字段、接口与规则 | [查询参考](usage/reference/index.mdoc) |
+| 修改实现或核对验证范围 | [开发文档](development/index.mdoc) |
+
+Agent 可先运行 edoc outline --depth 1 定位章节，再按稳定 section ID 使用 edoc read 读取所需内容。
+
+{% /section %}

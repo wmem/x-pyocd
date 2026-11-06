@@ -1,0 +1,26 @@
+{% section id="x-pyocd:dev:acceptance:runtime" title="下载与后端验证边界" %}
+
+{% section id="x-pyocd:dev:acceptance:runtime:scope" title="验证边界" %}
+
+在仓库根目录可运行以下检查；Python 环境应事先准备，命令不会安装插件的 pyOCD 运行依赖：
+
+```sh {% process=false %}
+xmake lua tests/api_run.lua
+uv run --no-project --no-sync python tests/test_worker.py
+```
+
+前者检查公开配置合同，后者使用模拟 pyOCD 后端检查下载、校验、失败重试和探针锁。检查入口见 [api_run.lua](../sources.mdoc#x-pyocd:source:tests:api_run:lua) 与 [test_worker.py](../sources.mdoc#x-pyocd:source:tests:test_worker:py)。这里给出运行方式，不把源码测试视为实板结果。
+
+源码中的配置校验和执行流程与实际板卡验收是不同层次。准备插件、配置检查和模拟后端检查不能替代真实探针枚举、下载读回和复位验证。实板验证需要工程的真实配置、已准备的运行依赖和可访问探针。
+
+2026-10-13 在 KY3133-B00／GD32F427 工程中，隔离安装后的插件通过 WSL 调用 Windows pyOCD：枚举到 WCH-Link `BC496BA027E9`，经 xdtc 内联 entry 在 100 kHz 完成 ELF 下载及 169940 bytes 实读校验，随后 entry 复位通过。
+
+报告及读回文件保存在该 MCU 工程的 `build/x-addon-hardware-evidence/flash-*/`、`reset-*/`。
+
+该结果覆盖当前芯片、探针和 Windows via WSL 配置；Linux 仍是模拟后端验证，其他芯片、探针及物理上电行为未由本轮验证覆盖。
+
+许可证见 [LICENSE](../sources.mdoc#x-pyocd:source:LICENSE)。
+
+{% /section %}
+
+{% /section %}

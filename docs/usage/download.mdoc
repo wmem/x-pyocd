@@ -1,0 +1,19 @@
+{% section id="x-pyocd:use:download" title="下载、读回与复位" %}
+
+先准备[执行配置](reference/config.mdoc)，显式提供执行系统、解释器、芯片、探针、速率及固件/存储范围。先检查输入，再执行：
+
+{% relation-diagram id="x-pyocd:reading:flash" /%}
+
+这是 flash 的成功主线。readback 使用独立的 attach 配置，不经过编程或复位；失败重试、频率和报告边界仍以[操作合同](reference/config.mdoc#x-pyocd:use:reference:config:operations)为准。
+
+```sh {% process=false %}
+xmake x-pyocd --config=download.json --dry-run flash
+xmake x-pyocd --config=download.json probes
+xmake x-pyocd --config=download.json flash
+```
+
+--dry-run 只校验配置；probes 枚举探针；flash 执行配置中的构建、下载及可选实读校验。检查 report_dir 下本次报告的结果与覆盖范围；连接前失败可能尚未创建报告，不能据旧报告判断本轮通过。
+
+独立 readback 使用满足 attach 和关闭读取缓存条件的配置，reset 按配置复位。完整约束见[操作合同](reference/config.mdoc#x-pyocd:use:reference:config:operations)，BIN 与 ELF 的差异、J-Link 连接前保护见[镜像与探针参考](reference/probes-and-images.mdoc)。真实硬件结果只适用于对应工程、芯片、探针和执行平台。
+
+{% /section %}

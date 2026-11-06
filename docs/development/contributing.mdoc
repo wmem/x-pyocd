@@ -1,0 +1,14 @@
+{% section id="x-pyocd:dev:contributing" title="开发与验证" %}
+
+修改公开 API 或后端时，从[架构与边界](architecture.mdoc)确定责任，再按照[后端验证入口](acceptance/runtime.mdoc)运行相应 Lua、平台后端及传输检查。涉及实际串口、探针或 Windows 平台时，另外记录真实环境与未覆盖项。
+
+准备本地 Addon 使用 scripts/prepare-addon.lua，输出目录必须不存在。索引层的真实安装与跨工具组合回归由 {% page project="xmake-addons" id="docs/development/acceptance/releases" label="索引验证文档" /%}维护。
+
+
+## 文档维护
+
+正式首页为 docs/index.mdoc；使用教程与完整参考放在 usage/，实现、设计和验收放在 development/。新增主题时更新对应层 index 的概览或 directory-order，不维护全局文章清单。稳定 section ID 用于长期引用，历史记录说明日期、版本和适用范围。
+
+从仓库根运行 edoc validate、edoc outline --depth 1 和 edoc，检查生成页面的目录、跳转及阅读顺序。生成的 output/ 与 .edoc-build/ 不作为手工维护源。
+
+{% /section %}

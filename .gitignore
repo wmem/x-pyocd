@@ -2,3 +2,7 @@ build/
 .xmake/
 __pycache__/
 *.pyc
+
+# edoc 生成产物
+/output/
+/.edoc-build/

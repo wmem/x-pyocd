@@ -1,0 +1,151 @@
+{
+  "objects": [
+    {
+      "id": "x-pyocd:reading:flash:prepare",
+      "kind": "node",
+      "label": "配置检查 / 可选构建",
+      "source": {
+        "file": "docs/usage/download.mdoc"
+      }
+    },
+    {
+      "id": "x-pyocd:reading:flash:check",
+      "kind": "node",
+      "label": "检查镜像、探针与范围",
+      "source": {
+        "file": "docs/usage/download.mdoc"
+      }
+    },
+    {
+      "id": "x-pyocd:reading:flash:write",
+      "kind": "node",
+      "label": "编程与可选实读校验",
+      "source": {
+        "file": "docs/usage/download.mdoc"
+      }
+    },
+    {
+      "id": "x-pyocd:reading:flash:report",
+      "kind": "node",
+      "label": "复位运行与报告",
+      "source": {
+        "file": "docs/usage/download.mdoc"
+      }
+    }
+  ],
+  "relations": [
+    {
+      "id": "x-pyocd:reading:flash:edge:prepare",
+      "kind": "connection",
+      "class": "执行顺序",
+      "label": "输入就绪",
+      "endpoints": [
+        "x-pyocd:reading:flash:prepare",
+        "x-pyocd:reading:flash:check"
+      ],
+      "direction": {
+        "sources": [
+          "x-pyocd:reading:flash:prepare"
+        ],
+        "targets": [
+          "x-pyocd:reading:flash:check"
+        ]
+      },
+      "source": {
+        "file": "docs/usage/download.mdoc"
+      }
+    },
+    {
+      "id": "x-pyocd:reading:flash:edge:write",
+      "kind": "connection",
+      "class": "执行顺序",
+      "label": "选择并锁定探针",
+      "endpoints": [
+        "x-pyocd:reading:flash:check",
+        "x-pyocd:reading:flash:write"
+      ],
+      "direction": {
+        "sources": [
+          "x-pyocd:reading:flash:check"
+        ],
+        "targets": [
+          "x-pyocd:reading:flash:write"
+        ]
+      },
+      "source": {
+        "file": "docs/usage/download.mdoc"
+      }
+    },
+    {
+      "id": "x-pyocd:reading:flash:edge:finish",
+      "kind": "connection",
+      "class": "执行顺序",
+      "label": "写入阶段通过",
+      "endpoints": [
+        "x-pyocd:reading:flash:write",
+        "x-pyocd:reading:flash:report"
+      ],
+      "direction": {
+        "sources": [
+          "x-pyocd:reading:flash:write"
+        ],
+        "targets": [
+          "x-pyocd:reading:flash:report"
+        ]
+      },
+      "source": {
+        "file": "docs/usage/download.mdoc"
+      }
+    }
+  ],
+  "views": [
+    {
+      "id": "x-pyocd:reading:flash",
+      "kind": "architecture",
+      "label": "flash 成功路径",
+      "include": {
+        "objects": [
+          "x-pyocd:reading:flash:prepare",
+          "x-pyocd:reading:flash:check",
+          "x-pyocd:reading:flash:write",
+          "x-pyocd:reading:flash:report"
+        ],
+        "relations": [
+          "x-pyocd:reading:flash:edge:prepare",
+          "x-pyocd:reading:flash:edge:write",
+          "x-pyocd:reading:flash:edge:finish"
+        ]
+      },
+      "layout": {
+        "direction": "TB",
+        "routing": "orthogonal",
+        "constraints": [
+          {
+            "type": "order",
+            "axis": "y",
+            "nodes": [
+              "x-pyocd:reading:flash:prepare",
+              "x-pyocd:reading:flash:check",
+              "x-pyocd:reading:flash:write",
+              "x-pyocd:reading:flash:report"
+            ],
+            "gap": 36
+          },
+          {
+            "type": "align",
+            "axis": "x",
+            "nodes": [
+              "x-pyocd:reading:flash:prepare",
+              "x-pyocd:reading:flash:check",
+              "x-pyocd:reading:flash:write",
+              "x-pyocd:reading:flash:report"
+            ]
+          }
+        ]
+      },
+      "source": {
+        "file": "docs/usage/download.mdoc"
+      }
+    }
+  ]
+}

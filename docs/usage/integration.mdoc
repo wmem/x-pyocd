@@ -1,0 +1,35 @@
+{% section id="x-pyocd:use:integration" title="在 xdtc action 中调用" %}
+
+{% section id="x-pyocd:use:integration:entry" title="在 xdtc action 中直接调用" %}
+
+配合 xdtc 0.11.0 的 action `entry` 使用，工具源码与 Addon 使用相同版本号。下面假定 `board.lua` 中的 `tools.download` 已按[配置参考](reference/config.mdoc)提供完整字段：
+
+```lua {% process=false %}
+-- xdtc.lua
+return {
+    data = "board.lua",
+    actions = {
+        flash = {
+            select = "tools.download",
+            entry = function(config, api, ...)
+                local pyocd = import("@addon.x-pyocd.api", {anonymous = true})
+                return pyocd.flash(config)
+            end,
+        },
+    },
+}
+```
+
+```sh {% process=false %}
+xmake xdtc flash
+```
+
+不需要额外的转发脚本。
+
+公开 Lua 接口包括 `plan(config, operation)`、`flash(config)`、`reset(config)`、`probes(config)` 和 `readback(config)`；plan 仅校验并返回独立配置，其余执行操作。
+
+硬件参数仍来自 `config`，`api` 和 action 位置参数不会自动转换成插件参数。
+
+{% /section %}
+
+{% /section %}

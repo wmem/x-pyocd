@@ -1,0 +1,7 @@
+{% section id="x-pyocd:use:overview" title="认识 x-pyocd" %}
+
+x-pyocd 是 Xmake Addon，为工程提供 pyOCD 探针枚举、ELF/BIN 下载、读回校验和复位。工程通过 `config` 显式提供执行系统、解释器、芯片、探针、通信速率、固件和存储布局；插件校验配置后运行对应后端，不解析 `board.lua`，也不安装 Python 或 pyOCD。
+
+插件可独立调用，也可由 xdtc 的 action `entry` 导入。xdtc 负责展开和选择数据，x-pyocd 负责执行；芯片 DFP 和 pyOCD 兼容脚本由工程或 MSP 提供。串口交互由独立的 [x-console](https://github.com/wmem/x-console) 提供。
+
+{% /section %}

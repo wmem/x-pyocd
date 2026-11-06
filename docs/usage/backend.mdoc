@@ -1,0 +1,15 @@
+{% section id="x-pyocd:use:backend" title="测试桥接复用后端" %}
+
+{% section id="x-pyocd:use:backend:bridge" title="测试桥接复用后端" %}
+
+`backend()` 返回当前安装中的 Python worker.py 绝对路径。应用可将路径导出到测试 config，并通过 importlib 加载该模块；MSP 不负责定位插件，也不再保留 debug_io.py 或 flash.py。
+
+Python 后端提供 select_probe(probes, requested)、probe_lock(identity, namespace, held=False)、flash_segments(filename, memory) 和 execute(config, operation, ...)；模块导入时不加载 pyOCD 或连接硬件。
+
+应用负责测试生命周期和串口协议，后端负责通用探针、锁及编程/读回。namespace 必须来自应用 config。
+
+测试桥接已经在父进程持有同一探针锁时，可使用 execute 的 lock_held=True，或直接运行 worker.py --config=<JSON> --lock-held flash。此内部参数仅表示复用已持有的锁；普通 Lua/CLI 操作仍自行加锁。
+
+{% /section %}
+
+{% /section %}

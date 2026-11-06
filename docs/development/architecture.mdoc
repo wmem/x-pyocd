@@ -1,0 +1,7 @@
+{% section id="x-pyocd:dev:architecture" title="架构与边界" %}
+
+[api.lua](sources.mdoc#x-pyocd:source:addon:modules:api:lua) 校验公开配置并提供 flash/reset/probes/readback 等入口；[worker.py](sources.mdoc#x-pyocd:source:addon:modules:runtime:worker:py) 执行 pyOCD 会话、下载、读回、失败重试、锁和报告；Windows 经 [run.ps1](sources.mdoc#x-pyocd:source:addon:modules:runtime:run:ps1) 选择运行环境。Addon [main.lua](sources.mdoc#x-pyocd:source:addon:plugins:x-pyocd:main:lua) 连接命令与 API。
+
+插件只消费显式 config，不解释板描述或安装运行依赖。修改探针选择时需保留实际 Session 打开前的保护；修改读取时需保留读取缓存条件及地址范围检查。配置的精确定义见[查询参考](../usage/reference/index.mdoc)，实板验证范围见[验收记录](acceptance/runtime.mdoc)。
+
+{% /section %}

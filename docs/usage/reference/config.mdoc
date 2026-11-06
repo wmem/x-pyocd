@@ -1,0 +1,100 @@
+{% section id="x-pyocd:use:reference:config" title="执行配置与操作合同" %}
+
+{% section id="x-pyocd:use:reference:config:runtime" title="通过 config 指定执行方式" %}
+
+下面是 Linux 下载配置的形状示例。路径、芯片、探针和 Flash 边界均须替换为工程真实值；数字是示例值，不是板级默认值。
+
+```lua {% process=false %}
+local config = {
+    host = "linux",
+    runtime = {python = "/path/to/prepared/python"},
+    project_root = "/path/to/project",
+    report_dir = "/path/to/project/build/download-reports",
+    chip = "<chip>",
+    lock_namespace = "my-board-probe",
+    debug = {
+        probe = "<probe-id>",
+        frequency = 100000,       -- Hz
+        protocol = "swd",
+        connect = "under-reset",
+    },
+    pyocd = {
+        target_override = "<pyocd-target>",
+        ["cache.enable_memory"] = false,
+        ["cache.read_code_from_elf"] = false,
+        -- pack = {"/path/to/vendor.pack"},
+        -- user_script = "/path/to/compat.py",
+    },
+    artifacts = {elf = "/path/to/project/build/firmware.elf"},
+    memory = {flash = {start = 0x08000000, size = 1024 * 1024}},
+    flash = {verify = true, frequencies = {100000, 50000}},
+    -- 可选：先由 Xmake 构建指定 target，再执行下载。
+    -- build = {target = "firmware", jobs = 8},
+}
+```
+
+CLI 接收相同字段的 JSON；JSON 中使用十进制地址，且不能包含 Lua 注释或表达式。Lua API 直接接收 table。建议资源路径使用绝对路径；插件不把普通配置字符串自动解释成板描述相对路径。Linux 后端要求 Xmake 运行在 Linux，探针也须在 Linux 可见。
+
+Windows 下载使用相同硬件配置，替换执行环境：
+
+```lua {% process=false %}
+config.host = "windows"
+config.runtime = {
+    python = {uv = "uv", tool = "pyocd"},
+    powershell = "powershell.exe",
+    wslpath = "wslpath", -- 从 WSL 执行时必填；Windows 原生不需要。
+}
+```
+
+此处 `uv` 是 Windows 中已有的 uv 命令。插件用 `uv tool dir` 查找已安装 `pyocd` 工具环境中的 `Scripts/python.exe`，不会执行 `uv tool install`。
+
+也可以直接提供 Windows Python 路径，或 `{program = "<命令>", args = {...}}`；Linux 的 Python 同样支持字符串或 `program/args` 形式。
+
+从 WSL 执行时，插件转换 `project_root`、`report_dir`、固件路径、`pyocd.pack` 和 `pyocd.user_script`，再调用 Windows PowerShell 和 Python。探针由 Windows pyOCD 访问，不要求透传到 WSL。
+
+{% /section %}
+
+{% section id="x-pyocd:use:reference:config:operations" title="操作与配置合同" %}
+
+完整校验由 [api.lua](../../development/sources.mdoc#x-pyocd:source:addon:modules:api:lua) 的 `plan(config, operation)` 维护。以下为按操作查询的摘要：
+
+| 操作 | 配置与行为 |
+| --- | --- |
+| `probes` | 需要 `host/runtime/project_root/report_dir`；列出执行系统可见探针，输出含 `probes` 数组的 JSON，不自动选择探针 |
+| `reset` | 另需 `chip/lock_namespace/debug/pyocd`；连接所选探针并复位，使用 `debug.frequency` |
+| `flash` | 另需 `chip/lock_namespace/debug/pyocd/artifacts/memory.flash/flash`；按下面的 ELF/BIN 规则选择镜像，按频率列表尝试编程、可选实读校验，成功后复位运行 |
+| `readback` | 另需 `chip/lock_namespace/debug/pyocd/artifacts/memory.flash`；按 ELF 加载段或 BIN 的指定完整范围实读比较并保存证据，使用 debug.frequency，不编程、复位或暂停目标 |
+
+`debug.probe` 按探针 ID 的不区分大小写子串匹配，必须恰好匹配一个探针；建议提供完整 ID。`debug.protocol` 接受 `swd/jtag`，`debug.connect` 接受 `attach/halt/pre-reset/under-reset`。速率为正整数 Hz；`flash.frequencies` 是显式、非空的尝试顺序。
+
+`pyocd.target_override` 必填，其他 pyOCD 参数直接传给 pyOCD。若同时提供 `pyocd.frequency/dap_protocol`，它们必须与 `debug.frequency/protocol` 一致。启用 `flash.verify` 时，必须显式关闭示例中的两个读取缓存，以确保校验读取来自目标。
+
+`memory.flash.start/size` 定义允许下载和读回的地址范围。镜像选择有两条现行路径：
+
+{% section id="x-pyocd:use:reference:config:images" title="ELF 与 BIN 镜像选择" %}
+
+- 默认 ELF：省略 download，提供 artifacts.elf；其中有内容的 PT_LOAD 加载段必须全部落在 memory.flash 范围内，越界或没有有效段会失败。
+- 显式 BIN：提供 download.format="bin"、download.artifact 和必填的整数基址 download.address；artifact 引用 artifacts 中对应路径，不要求 artifacts.elf。文件必须非空，基址及整个文件范围均须落在 memory.flash 内，连接前检查失败会拒绝执行。
+
+例如使用现有 BIN 镜像时，将默认 ELF 示例的镜像字段替换为：
+
+```lua {% process=false %}
+config.artifacts = {burn = "/path/to/project/build/app_burn.bin"}
+config.download = {format = "bin", artifact = "burn", address = 0x08000000}
+```
+
+flash 写入所选文件，readback 比较同一文件对应范围；报告保存实际格式、路径、基址和长度。BIN 模式不额外清理分区。版本引入与当时的硬件验证范围见[镜像兼容记录](probes-and-images.mdoc)。
+
+{% /section %}
+
+`build` 仅适用于 flash，明确指定目标和并行数；插件不会猜测目标名称或固件位置。
+
+`readback` 要求 debug.connect 为 attach，且显式关闭 cache.enable_memory 与 cache.read_code_from_elf；不需要 flash 配置，也不允许 build。连接退出时不自动恢复目标，报告和各段读回文件存入 report_dir/readback-*。
+
+执行以探针 ID 和 `lock_namespace` 加锁。工程希望与旧工具共享锁时，须使用相同 namespace。编程和复位的报告写入 `report_dir` 下的独立子目录，包含 pyOCD 配置及 `result.json`；启用校验时保存各加载段读回文件。
+
+连接之前的配置、ELF/BIN 或探针选择错误可能尚未创建报告。编程、校验、重试与报告流程见 [worker.py](../../development/sources.mdoc#x-pyocd:source:addon:modules:runtime:worker:py)；Windows 解释器选择见 [run.ps1](../../development/sources.mdoc#x-pyocd:source:addon:modules:runtime:run:ps1)。
+
+{% /section %}
+
+{% /section %}

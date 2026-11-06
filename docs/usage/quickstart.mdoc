@@ -1,0 +1,41 @@
+{% section id="x-pyocd:use:quickstart" title="安装与操作入口" %}
+
+{% section id="x-pyocd:use:quickstart:install" title="安装与入口" %}
+
+需要支持 Addon 的 Xmake，以及执行系统中已安装 pyOCD 的 Python 环境。Windows 后端还需要 PowerShell；从 WSL 调用 Windows 时需配置 `wslpath`，用于转换传给 Windows 的资源路径。
+
+本地开发时，在本仓库根目录准备并安装插件；输出目录须尚不存在：
+
+```sh {% process=false %}
+xmake lua scripts/prepare-addon.lua /tmp/x-pyocd-addon-stage
+xmake addon --install /tmp/x-pyocd-addon-stage
+```
+
+这里安装的是 Xmake 插件，不会安装其运行依赖。消费工程可声明版本化依赖：
+
+```lua {% process=false %}
+add_repositories("kunyi git@github.com:wmem/xmake-addons.git")
+add_addons("x-pyocd 0.3.1")
+```
+
+版本化安装需要索引仓库中的对应配方及其固定的源码提交。
+
+先按[执行配置](reference/config.mdoc)创建 download.json；本页示例路径、芯片和探针值需要替换为真实配置。
+
+安装后，在消费工程目录执行：
+
+```sh {% process=false %}
+xmake x-pyocd --config=download.json --dry-run flash
+xmake x-pyocd --config=download.json flash
+xmake x-pyocd --config=download.json reset
+xmake x-pyocd --config=download.json probes
+xmake x-pyocd --config=readback.json readback
+```
+
+readback.json 应采用 attach 连接并显式关闭两个读取缓存，不包含 build；不能直接复用 under-reset 下载配置。完整条件见[操作合同](reference/config.mdoc#x-pyocd:use:reference:config:operations)。
+
+`--dry-run` 校验并输出配置，不构建、不连接探针。它不能证明解释器、芯片资源和硬件可用。实际执行失败时以非零状态退出。
+
+{% /section %}
+
+{% /section %}
